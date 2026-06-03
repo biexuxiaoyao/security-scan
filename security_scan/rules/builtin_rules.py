@@ -49,8 +49,8 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "remediation": "Move the value to an environment variable or encrypted config source. "
                        "Use Spring Cloud Config with {cipher} encryption or company encryption service (BEE_).",
         "pattern": _p(
-            r'(?:password|passwd|pwd|pass|secret|api_key|apikey|'
-            r'token|private_key|auth_token|connection_string)\s*'
+            r'["\']?(?:password|passwd|pwd|pass|secret|api_key|apikey|'
+            r'token|private_key|auth_token|connection_string)["\']?\s*'
             r'[=:]\s*["\']?([^"\'\]\s,;]{4,})["\']?'
         ),
         "pattern_raw": None,
