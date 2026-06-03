@@ -13,8 +13,9 @@ from security_scan.rules.context_analyzer import ContextAnalyzer
 class RuleEngine:
     """Combines built-in + custom rules, applies context analysis and whitelist filtering."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, project_path: str | None = None):
         self.config = config
+        self.project_path = project_path
         self.whitelist = WhitelistFilter(config)
         self.context_analyzer = ContextAnalyzer(config)
         self.custom_loader = CustomRuleLoader(config)
@@ -94,11 +95,23 @@ class RuleEngine:
                 return True
         return False
 
-    def post_process(self, findings: list[dict]) -> list[dict]:
+    def post_process(self, findings: list[dict], project_path: str | None = None) -> list[dict]:
         """Apply whitelist filtering and context analysis to all findings.
+
+        Parameters
+        ----------
+        findings :
+            Raw findings from the scanners.
+        project_path :
+            Project root path, used to locate project-level whitelist file.
+            Falls back to ``self.project_path`` if not provided.
 
         Returns filtered list.
         """
+        resolved_path = project_path or self.project_path
+        if resolved_path:
+            self.whitelist.configure(resolved_path)
+
         # 1. Context analysis adjusts confidence / severity
         for f in findings:
             self.context_analyzer.analyze(f)

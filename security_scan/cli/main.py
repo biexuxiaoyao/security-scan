@@ -93,7 +93,7 @@ def scan(path, incremental, ci, output_format, output_file, generate_config, ver
 
     # ── classify & scan ─────────────────────────────────────
     classifier = FileClassifier(config)
-    rule_engine = RuleEngine(config)
+    rule_engine = RuleEngine(config, project_path=path)
     ast_scanner = ASTScanner(config)
     regex_scanner = RegexScanner(rule_engine)
     aggregator = Aggregator()

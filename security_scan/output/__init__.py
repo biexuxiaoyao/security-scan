@@ -10,6 +10,8 @@ from typing import Any
 
 from security_scan.output.console import ConsoleReporter
 from security_scan.output.json_report import JSONReportGenerator
+from security_scan.output.html_report import HTMLReportGenerator
+from security_scan.output.sarif_report import SARIFReportGenerator
 
 
 _REPORTERS: dict[str, Any] = {}
@@ -33,3 +35,5 @@ def register_reporter(name: str, instance: Any) -> None:
 # Register built-in reporters
 register_reporter("console", ConsoleReporter())
 register_reporter("json", JSONReportGenerator())
+register_reporter("html", HTMLReportGenerator())
+register_reporter("sarif", SARIFReportGenerator())
