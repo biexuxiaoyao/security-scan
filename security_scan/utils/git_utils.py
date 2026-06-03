@@ -3,17 +3,28 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 
 
-def get_staged_files() -> list[str]:
+def _git_cmd(cwd: str | None = None) -> list[str]:
+    """Return base git command, optionally pointing to a repo directory."""
+    if cwd:
+        return ["git", "-C", cwd]
+    return ["git"]
+
+
+def get_staged_files(repo_path: str | None = None) -> list[str]:
     """Return list of staged file paths from ``git diff --cached --name-only``.
+
+    Parameters
+    ----------
+    repo_path :
+        If provided, run git from that directory (via ``git -C``).
 
     Returns an empty list if not in a git repository or if an error occurs.
     """
     try:
         result = subprocess.run(
-            ["git", "diff", "--cached", "--name-only"],
+            _git_cmd(repo_path) + ["diff", "--cached", "--name-only"],
             capture_output=True,
             text=True,
             check=False,
@@ -25,14 +36,14 @@ def get_staged_files() -> list[str]:
         return []
 
 
-def get_repo_root() -> str:
+def get_repo_root(repo_path: str | None = None) -> str:
     """Return the absolute path of the current git repository root.
 
     Returns an empty string if not in a git repository.
     """
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
+            _git_cmd(repo_path) + ["rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
             check=False,

@@ -18,10 +18,14 @@ class FileCollector:
     ----------
     config :
         Full configuration dict (used for ``scan.exclude`` patterns).
+    project_path :
+        Project root path. Used for incremental scan to run git commands
+        in the correct directory.
     """
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, project_path: str | None = None):
         self.config = config
+        self.project_path = project_path
         self._exclude_patterns = config.get("scan", {}).get("exclude", [])
         self._file_extensions = config.get("scan", {}).get("file_extensions", [])
 
@@ -51,14 +55,19 @@ class FileCollector:
         """Collect staged changed files via ``git diff --cached``.
 
         Only returns files with supported extensions (excludes binary files).
+
+        Staged file paths (relative to repo root) are resolved to absolute
+        paths using ``project_path`` so they can be opened by scanners.
         """
-        staged = get_staged_files()
+        staged = get_staged_files(repo_path=self.project_path)
         result: list[str] = []
+        base = Path(self.project_path or "").resolve()
         for f in staged:
             if self._is_excluded(f):
                 continue
             if is_supported_extension(f, self._file_extensions):
-                result.append(f)
+                abs_path = str(base / f)
+                result.append(abs_path)
         return sorted(result)
 
     # ── internals ──────────────────────────────────────────────

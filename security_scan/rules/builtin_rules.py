@@ -31,7 +31,7 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "severity": "CRITICAL",
         "description": "Plaintext string literal assigned to a password-related variable.",
         "pattern": _p(
-            r'(password|passwd|pwd|secret|secret_key|api_key|auth_token)\s*'
+            r'(password|passwd|pwd|pass|secret|secret_key|api_key|auth_token|token)\s*'
             r'[=:]\s*"([^"]{4,})"'
         ),
         "pattern_raw": None,  # AST-based — regex is fallback
@@ -44,7 +44,7 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "severity": "HIGH",
         "description": "A credential-related key in a config file.",
         "pattern": _p(
-            r'(?:password|passwd|pwd|secret|api_key|apikey|'
+            r'(?:password|passwd|pwd|pass|secret|api_key|apikey|'
             r'token|private_key|auth_token|connection_string)\s*'
             r'[=:]\s*["\']?([^"\'\]\s,;]{4,})["\']?'
         ),

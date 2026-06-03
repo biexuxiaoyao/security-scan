@@ -75,7 +75,7 @@ def scan(path, incremental, ci, output_format, output_file, generate_config, ver
         click.echo(f"Config: {config}", err=True)
 
     # ── collect files ───────────────────────────────────────
-    collector = FileCollector(config)
+    collector = FileCollector(config, project_path=path)
     if incremental:
         files = collector.collect_incremental()
         if not files:
@@ -117,14 +117,17 @@ def scan(path, incremental, ci, output_format, output_file, generate_config, ver
     elapsed = time.monotonic() - start
 
     # ── output ──────────────────────────────────────────────
-    if output_format == "json":
-        reporter = JSONReportGenerator()
-        if output_file:
-            reporter.generate(merged, output_file)
-        else:
-            click.echo(reporter.generate_string(merged))
+    reporter = get_reporter(output_format)
+    if reporter is None:
+        click.echo(f"Unknown output format: {output_format!r}", err=True)
+        click.echo(f"Available formats: {', '.join(list_reporters())}", err=True)
+        raise SystemExit(20)
+
+    if output_file:
+        reporter.generate(merged, output_file)
+    elif hasattr(reporter, "generate_string"):
+        click.echo(reporter.generate_string(merged))
     else:
-        reporter = ConsoleReporter()
         reporter.report(merged)
         reporter.summary(merged, elapsed)
 
