@@ -44,5 +44,3 @@ include = ["security_scan*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-EOF
-echo "pyproject.toml created."
