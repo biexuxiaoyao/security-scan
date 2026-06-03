@@ -143,8 +143,10 @@ class HTMLReportGenerator:
         rule_id = f.get("rule_id", "?")
         confidence = f.get("confidence", 0.0)
         encrypted = f.get("encrypted", False)
+        remediation = f.get("remediation", "")
 
         encrypted_tag = '<span class="badge badge-encrypted">已加密</span>' if encrypted else ""
+        remediation_html = f'<div class="finding-desc" style="color:#28a745;"><strong>修复建议:</strong> {_html_escape(remediation)}</div>' if remediation else ""
 
         return (
             f'<div class="finding" style="border-left-color:{color}">'
@@ -154,6 +156,7 @@ class HTMLReportGenerator:
             f'</div>'
             f'<div class="finding-content">{_html_escape(content)}</div>'
             f'<div class="finding-desc">{_html_escape(desc)}</div>'
+            f'{remediation_html}'
             f'<div class="finding-rule">Rule: {rule_id} | 置信度: {confidence:.0%}</div>'
             f'</div>'
         )
@@ -162,4 +165,3 @@ class HTMLReportGenerator:
 def _html_escape(s: str) -> str:
     """Minimal HTML escaping."""
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-

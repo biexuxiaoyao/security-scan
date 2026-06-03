@@ -61,6 +61,10 @@ class RuleEngine:
         list[dict]
             Findings from this line (may be empty).
         """
+        # ── inline ignore comment → skip entirely ───────────────
+        if self.whitelist.has_inline_ignore(line):
+            return []
+
         findings: list[dict] = []
         for rule in get_rules_for_scope(file_scope):
             finding = match_rule_on_line(rule, line, line_number)

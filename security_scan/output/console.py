@@ -55,11 +55,14 @@ class ConsoleReporter:
         rule_name = f.get("rule_name", f.get("rule_id", "?"))
         confidence = f.get("confidence", 0.0)
         encrypted = f.get("encrypted", False)
+        remediation = f.get("remediation", "")
 
         tag = " \033[94m[encrypted]\033[0m" if encrypted else ""
         print(f"  {file_path}:{line_num}{tag}")
         print(f"    Rule: {rule_name}  (confidence: {confidence:.0%})")
         print(f"    {f.get('description', '')}")
+        if remediation:
+            print(f"    \033[90mFix: {remediation}\033[0m")
         print()
 
     def summary(self, findings: list[dict], elapsed: float | None = None) -> None:

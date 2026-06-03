@@ -13,6 +13,7 @@ from typing import Any
 #   scope         — "java" | "properties" | "yaml" | "json" | "xml" | "txt" | "md" | "all"
 #   severity      — "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
 #   description   — short description
+#   remediation   — actionable fix suggestion
 #   pattern       — compiled regex or None (for AST-only rules)
 #   pattern_raw   — raw pattern string (for serialization / display)
 
@@ -30,6 +31,8 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "scope": "java",
         "severity": "CRITICAL",
         "description": "Plaintext string literal assigned to a password-related variable.",
+        "remediation": "Replace with environment variable or secret manager (e.g. Vault, AWS Secrets Manager). "
+                       "Use @Value with an external property or System.getenv().",
         "pattern": _p(
             r'(password|passwd|pwd|pass|secret|secret_key|api_key|auth_token|token)\s*'
             r'[=:]\s*"([^"]{4,})"'
@@ -43,6 +46,8 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "scope": "config",  # shorthand for properties, yaml, json
         "severity": "HIGH",
         "description": "A credential-related key in a config file.",
+        "remediation": "Move the value to an environment variable or encrypted config source. "
+                       "Use Spring Cloud Config with {cipher} encryption or company encryption service (BEE_).",
         "pattern": _p(
             r'(?:password|passwd|pwd|pass|secret|api_key|apikey|'
             r'token|private_key|auth_token|connection_string)\s*'
@@ -57,6 +62,8 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "scope": "all",
         "severity": "HIGH",
         "description": "AWS Access Key ID (AKIA...).",
+        "remediation": "Use IAM roles, instance profiles, or environment variables. "
+                       "Rotate the exposed key immediately in AWS Console.",
         "pattern": _p(r'AKIA[0-9A-Z]{16}'),
         "pattern_raw": None,
     },
@@ -67,6 +74,7 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "scope": "all",
         "severity": "HIGH",
         "description": "AWS Secret Access Key.",
+        "remediation": "Use IAM roles or environment variables. Rotate the exposed key immediately.",
         "pattern": _p(
             r'(?i)aws[_-]?(?:secret|access)[_-]?key\s*[=:]\s*["\']?'
             r'([A-Za-z0-9/+=]{40})["\']?'
@@ -80,6 +88,8 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "scope": "all",
         "severity": "CRITICAL",
         "description": "PEM-encoded private key block.",
+        "remediation": "Remove the private key from source code and use a secrets manager. "
+                       "Revoke the compromised key pair immediately.",
         "pattern": _p(r'-----BEGIN\s+(?:RSA|EC|DSA|OPENSSH)\s+PRIVATE\s+KEY-----'),
         "pattern_raw": None,
     },
@@ -90,6 +100,8 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "scope": "all",
         "severity": "HIGH",
         "description": "JWT token or Bearer authorization header value.",
+        "remediation": "Issue a new token and invalidate the exposed one. Use short-lived tokens "
+                       "fetched at runtime from a secure token service.",
         "pattern": _p(
             r'(?:bearer|token|jwt)\s*[=:]\s*["\']?'
             r'(eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)["\']?'
@@ -103,22 +115,54 @@ BUILTIN_RULES: list[dict[str, Any]] = [
         "scope": "all",
         "severity": "CRITICAL",
         "description": "JDBC / Redis / MongoDB connection string containing credentials.",
+        "remediation": "Use a connection pool with externalized credentials via environment variables. "
+                       "Hide credentials behind a secrets manager or vault sidecar.",
         "pattern": _p(
             r'(?:jdbc|redis|mongodb|postgresql|mysql)://[^:]+:[^@]+@'
         ),
         "pattern_raw": None,
     },
-    # ── Properties: default password values ───────────────────
+    # ── All: default / weak password values ───────────────────
     {
         "id": "default_password",
         "name": "Default / weak password",
         "scope": "all",
         "severity": "MEDIUM",
         "description": "Common default or weak password values.",
+        "remediation": "Replace with a strong, randomly generated password stored in a secrets manager.",
         "pattern": _p(
             r'(?:password|passwd|pwd)\s*[=:]\s*["\']?'
             r'(?:admin|root|password|passw0rd|123456|test|guest|'
             r'default|changeme|qwerty|abc123)["\']?'
+        ),
+        "pattern_raw": None,
+    },
+    # ── All: password in comment ─────────────────────────────
+    {
+        "id": "password_in_comment",
+        "name": "Password in comment",
+        "scope": "all",
+        "severity": "MEDIUM",
+        "description": "Password or secret appears to be recorded in a code comment.",
+        "remediation": "Remove the credential from the comment. Use a reference like 'see vault://path/to/secret' instead.",
+        "pattern": _p(
+            r'(?://|#|--|/\*|<!--)\s*'
+            r'(?:password|passwd|pwd|secret)\s*(?:is|:|=)\s*["\']?[^\s"\'\]>]+'
+        ),
+        "pattern_raw": None,
+    },
+    # ── All: sensitive data in log output ──────────────────────
+    {
+        "id": "sensitive_log",
+        "name": "Sensitive information in log",
+        "scope": "all",
+        "severity": "MEDIUM",
+        "description": "Sensitive information (password, secret) appears in a log statement.",
+        "remediation": "Remove sensitive data from log messages. Log a non-sensitive identifier "
+                       "and mask or omit the credential value.",
+        "pattern": _p(
+            r'(?:log(?:ger)?|LOGGER)\s*\.\s*(?:info|debug|warn|error|trace)\s*'
+            r'\(.*(?:password|passwd|pwd|secret|token|credential)'
         ),
         "pattern_raw": None,
     },
@@ -158,6 +202,7 @@ def match_rule_on_line(rule: dict[str, Any], line: str, line_number: int) -> dic
         "rule_name": rule["name"],
         "severity": rule["severity"],
         "description": rule["description"],
+        "remediation": rule.get("remediation", ""),
         "line_number": line_number,
         "matched_content": m.group(0),
         "confidence": 0.85,  # base confidence; adjusted later by context analyzer

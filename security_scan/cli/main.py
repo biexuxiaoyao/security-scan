@@ -198,14 +198,97 @@ def enable():
 @click.command()
 @click.option("--force", is_flag=True, help="Force re-initialization.")
 @click.option("--index-url", default=None, help="Custom pip index URL.")
-def init(force, index_url):
-    """Initialize the security-scan environment."""
-    click.echo(f"security-scan v{__version__}")
-    click.echo("  ✓ Python OK")
-    click.echo("  ✓ PyYAML available")
-    if index_url:
-        click.echo(f"  Using pip index: {index_url}")
-    click.echo("Initialization complete.")
+@click.option("--offline", is_flag=True, help="Offline mode — skip remote checks.")
+@click.option("--deps-dir", default=None, help="Local directory with pre-downloaded wheels.")
+def init(force, index_url, offline, deps_dir):
+    """Initialize the security-scan environment.
+
+    Checks Python version, verifies / installs dependencies.
+    """
+    click.echo(f"security-scan v{__version__} — 环境初始化")
+    click.echo("=" * 40)
+
+    # 1. Python version check
+    py_ok = sys.version_info >= (3, 8)
+    click.echo(f"  Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}", nl=False)
+    if py_ok:
+        click.echo(" \033[92m✓\033[0m")
+    else:
+        click.echo(" \033[91m✗ 需要 Python ≥ 3.8\033[0m")
+        raise SystemExit(21)
+
+    # 2. Core dependencies
+    _REQUIRED = {"yaml": "PyYAML>=6.0"}
+    _OPTIONAL = {
+        "chardet": ("chardet>=5.0", "encoding"),
+        "javalang": ("javalang>=1.3", "ast"),
+        "openai": ("openai>=1.0", "ai"),
+    }
+
+    missing = []
+    for mod, spec in _REQUIRED.items():
+        if _importable(mod):
+            click.echo(f"  \033[92m✓\033[0m  {spec}")
+        else:
+            click.echo(f"  \033[91m✗\033[0m  {spec} — 缺失")
+            missing.append(spec)
+
+    for mod, (spec, group) in _OPTIONAL.items():
+        if _importable(mod):
+            click.echo(f"  \033[92m✓\033[0m  {spec}  [{group}]")
+        else:
+            click.echo(f"  \033[93m-\033[0m  {spec}  [{group}] (可选)")
+
+    # 3. Git check
+    if _git_available():
+        click.echo("  \033[92m✓\033[0m  Git")
+    else:
+        click.echo("  \033[93m⚠\033[0m  Git 未安装 — Hook 功能不可用")
+
+    # 4. Auto-install missing core deps
+    if missing and not offline:
+        click.echo("  尝试自动安装缺失依赖...")
+        cmd = [sys.executable, "-m", "pip", "install"]
+        if index_url:
+            cmd.extend(["--index-url", index_url])
+        if deps_dir:
+            cmd.extend(["--find-links", deps_dir])
+        cmd.extend(missing)
+        _pip_install(cmd)
+
+    click.echo("=" * 40)
+    click.echo("\033[92m✓ 初始化完成\033[0m")
+
+
+def _importable(mod_name: str) -> bool:
+    """Return True if *mod_name* can be imported."""
+    try:
+        __import__(mod_name)
+        return True
+    except ImportError:
+        return False
+
+
+def _git_available() -> bool:
+    """Return True if ``git --version`` succeeds."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "--version"], capture_output=True, text=True, check=False)
+        return r.returncode == 0
+    except FileNotFoundError:
+        return False
+
+
+def _pip_install(cmd: list[str]) -> None:
+    """Run pip install and report result."""
+    import subprocess
+    click.echo(f"  $ {' '.join(cmd)}", err=True)
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode == 0:
+        click.echo("  \033[92m✓ 依赖安装完成\033[0m")
+    else:
+        click.echo(f"  \033[91m✗ 安装失败\033[0m", err=True)
+        click.echo(f"    {r.stderr.strip()}", err=True)
 
 
 # ── main entry point ──────────────────────────────────────────
