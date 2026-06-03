@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/test
+    username: root
+    password: root123          # 应告警：明文密码
+  redis:
+    host: localhost
+    password: BEE_abc123def    # 不应告警：BEE_ 加密前缀
+
+api:
+  key: AKIAIOSFODNN7EXAMPLE    # 应告警：AWS Access Key
+  secret: "{cipher}encrypted"  # 不应告警：{cipher} 前缀

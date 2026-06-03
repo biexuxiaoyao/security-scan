@@ -1,0 +1,8 @@
+# 扫描排除规则 — 支持 glob 模式
+target/
+build/
+node_modules/
+.git/
+*.class
+*.jar
+*.war

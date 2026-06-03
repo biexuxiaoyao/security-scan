@@ -1,0 +1,24 @@
+# security-scan 配置文件
+# 项目级配置示例 — 按需修改
+
+scan:
+  include:
+    - "src/"
+    - "config/"
+  exclude:
+    - "target/"
+    - "build/"
+    - "node_modules/"
+    - ".git/"
+
+severity:
+  block_on_commit:
+    - CRITICAL
+    - HIGH
+  min_confidence_to_report: 0.50
+  min_confidence_to_block: 0.70
+
+encrypted_prefixes:
+  - "BEE_"
+  - "ENC("
+  - "{cipher}"
