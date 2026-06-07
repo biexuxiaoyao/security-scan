@@ -1,4 +1,4 @@
-"""Git operations utilities."""
+"""Git operations utilities — Windows GBK-safe subprocess calls."""
 
 from __future__ import annotations
 
@@ -12,6 +12,17 @@ def _git_cmd(cwd: str | None = None) -> list[str]:
     return ["git"]
 
 
+def _run_git(args: list[str], cwd: str | None = None) -> subprocess.CompletedProcess:
+    """Run git with explicit UTF-8 encoding (Windows GBK-safe)."""
+    return subprocess.run(
+        _git_cmd(cwd) if args[0] != "git" else args,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+
 def get_staged_files(repo_path: str | None = None) -> list[str]:
     """Return list of staged file paths from ``git diff --cached --name-only``.
 
@@ -23,12 +34,8 @@ def get_staged_files(repo_path: str | None = None) -> list[str]:
     Returns an empty list if not in a git repository or if an error occurs.
     """
     try:
-        result = subprocess.run(
-            _git_cmd(repo_path) + ["diff", "--cached", "--name-only"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        result = _run_git(["git", "-C", repo_path, "diff", "--cached", "--name-only"]
+                          if repo_path else ["git", "diff", "--cached", "--name-only"])
         if result.returncode != 0:
             return []
         return [f.strip() for f in result.stdout.splitlines() if f.strip()]
@@ -42,12 +49,8 @@ def get_repo_root(repo_path: str | None = None) -> str:
     Returns an empty string if not in a git repository.
     """
     try:
-        result = subprocess.run(
-            _git_cmd(repo_path) + ["rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        result = _run_git(["git", "-C", repo_path, "rev-parse", "--show-toplevel"]
+                          if repo_path else ["git", "rev-parse", "--show-toplevel"])
         if result.returncode != 0:
             return ""
         return result.stdout.strip()
@@ -61,7 +64,8 @@ def is_staged_file(file_path: str) -> bool:
         result = subprocess.run(
             ["git", "diff", "--cached", "--name-only", "--", file_path],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         return result.returncode == 0 and file_path in result.stdout.strip()
@@ -75,7 +79,8 @@ def has_unresolved_conflicts() -> bool:
         result = subprocess.run(
             ["git", "diff", "--check"],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         return "conflict" in result.stdout.lower()

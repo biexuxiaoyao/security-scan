@@ -99,7 +99,7 @@ class BatchProcessor:
         for f in findings:
             f["ai_verdict"] = True
             f["ai_confidence"] = 0.0
-            f["ai_reason"] = "AI classification unavailable (service disabled or SDK not installed)"
+            f["ai_reason"] = "AI classification unavailable (service disabled)"
             f["ai_dismissed"] = False
         return findings
 

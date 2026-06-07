@@ -1,9 +1,18 @@
-"""Console output reporter."""
+"""Console output reporter — GBK-safe print on Windows."""
 
 from __future__ import annotations
 
 import sys
 from typing import Any
+
+# Ensure stdout/stderr won't crash on Windows GBK consoles
+for _stream_name in ("stdout", "stderr"):
+    _stream = getattr(sys, _stream_name, None)
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(errors="replace")
+        except OSError:
+            pass
 
 SEVERITY_ICONS = {
     "CRITICAL": "\033[91m[CRITICAL]\033[0m",
@@ -19,7 +28,7 @@ class ConsoleReporter:
     def report(self, findings: list[dict]) -> None:
         """Print formatted findings to stdout."""
         if not findings:
-            print("\n\033[92m✓ No security issues found.\033[0m\n")
+            print("\n\033[92m[OK] No security issues found.\033[0m\n")
             return
 
         print("\n" + "=" * 60)

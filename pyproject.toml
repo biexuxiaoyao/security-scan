@@ -17,9 +17,7 @@ ast = [
     "tree-sitter>=0.20",
     "javalang>=1.3",
 ]
-ai = [
-    "openai>=1.0",
-]
+ai = []
 report = [
     "jinja2>=3.0",
 ]

@@ -183,7 +183,7 @@ security-scan/
 ```bash
 pip install security-scan            # 核心: PyYAML + click
 pip install security-scan[ast]       # + tree-sitter + javalang
-pip install security-scan[ai]        # + openai SDK
+pip install security-scan[ai]        # + AI 分类（直接 HTTP，无需 SDK）
 pip install security-scan[encoding]  # + chardet
 pip install security-scan[report]    # + jinja2（HTML 选用）
 pip install security-scan[all]       # 全部

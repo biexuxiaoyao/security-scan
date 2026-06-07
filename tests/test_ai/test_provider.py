@@ -6,12 +6,10 @@ from security_scan.ai.provider import AIProvider
 
 
 class TestAIProvider:
-    def test_not_available_without_openai(self):
-        """When openai SDK is not installed, available is False."""
+    def test_available_always_true(self):
+        """available is always True — uses stdlib HTTP, no SDK needed."""
         provider = AIProvider({"ai": {"enabled": True}})
-        # openai IS installed in dev env, so this may be True.
-        # The test verifies the property exists and returns bool.
-        assert isinstance(provider.available, bool)
+        assert provider.available is True
 
     def test_enabled_property(self):
         provider = AIProvider({"ai": {"enabled": True}})

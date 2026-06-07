@@ -27,6 +27,60 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "encrypted_prefixes": [],
     "custom_rules": [],
     "file_formats": [],
+    "config_file_secrets": {
+        "enabled": True,
+        "exclude_patterns": ["messages_*.properties"],
+        "key_rules": [
+            {
+                "id": "config_plaintext_password",
+                "name": "配置文件明文密码",
+                "severity": "HIGH",
+                "patterns": [
+                    "(?i).*redis.*(?:password|auth|pass|secret)$",
+                    "(?i)ZOO_SERVER_PASSWORDS|ZOO\\.SERVER\\.PASSWORDS",
+                ],
+            },
+            {
+                "id": "config_plaintext_key",
+                "name": "配置文件明文密钥",
+                "severity": "HIGH",
+                "patterns": [
+                    "(?i).*(?:password|secret|pwd|key|token)$",
+                ],
+            },
+            {
+                "id": "config_plaintext_token",
+                "name": "配置文件明文Token",
+                "severity": "HIGH",
+                "patterns": [
+                    "(?i)sasl\\.jaas\\.config",
+                    "(?i)spring\\.kafka\\.properties\\.sasl\\.jaas\\.config",
+                    "(?i)spring\\.kafka\\.producer\\.properties\\.sasl\\.jaas\\.config",
+                    "(?i)spring\\.kafka\\.consumer\\.properties\\.sasl\\.jaas\\.config",
+                    "(?i)bee\\.kafka\\.ds1\\.properties\\.sasl\\.jaas\\.config",
+                    "(?i)bee\\.kafka\\.ds2\\.properties\\.sasl\\.jaas\\.config",
+                ],
+            },
+        ],
+        "key_whitelist": [
+            "(?i)^(?:publicKey|public.key|public-key|pubKey|public_key|appKey|access.key|access-key|accesskey)$",
+            "(?i)^(?:topickey|relatedkey|related-key|binding-routing-key)$",
+            "(?i).*RelatedKey.*",
+            "(?i).*poseidon.*",
+            "(?i)^(?:ignoretoken|bee\\.microservice\\.token)$",
+        ],
+        "value_encrypted_prefixes": [
+            "BEE_", "ENC(", "{ciph",
+            "encrypt:", "M_ENC",
+            "LSFI_ENV_COMMON",
+        ],
+        "value_placeholder_patterns": [
+            "^\\$\\([^)]+\\)$",
+            "^\\$\\{[^}]+\\}$",
+            "^<[^>]+>$",
+            "^@[^@]+@$",
+        ],
+    },
     "ai": {
         "enabled": False,
         "provider": "openai",

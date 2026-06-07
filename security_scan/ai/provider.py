@@ -1,36 +1,34 @@
-"""Multi-model AI provider adapter — OpenAI, Azure OpenAI, Ollama, etc."""
+"""Multi-model AI provider adapter — sends direct HTTP requests to any
+OpenAI-compatible chat completions API (OpenAI, Azure OpenAI, DeepSeek,
+Ollama, vLLM, etc.). Uses only stdlib ``urllib`` — no SDK required.
+"""
 
 from __future__ import annotations
 
+import json
 import os
+import urllib.error
+import urllib.request
 from typing import Any
 
 
 class AIProvider:
-    """Unified interface for different LLM backends.
+    """Unified interface for different LLM backends via direct HTTP calls.
 
-    Supports OpenAI, Azure OpenAI, and any OpenAI-compatible API
-    (Ollama, DeepSeek, vLLM, etc.) via the ``base_url`` config.
-
-    The actual OpenAI SDK import is deferred — the module is a no-op
-    when ``openai`` is not installed (the caller should check
-    ``available`` first).
+    Supports any OpenAI-compatible chat completions API by setting
+    the ``base_url`` config to the provider's endpoint (e.g.
+    ``https://api.openai.com/v1``, ``http://localhost:11434/v1``).
     """
 
     def __init__(self, config: dict):
         self.config = config.get("ai", {})
-        self._client: Any = None
 
     # ── properties ────────────────────────────────────────────
 
     @property
     def available(self) -> bool:
-        """Return True if the ``openai`` SDK is installed."""
-        try:
-            import openai  # noqa: F401
-            return True
-        except ImportError:
-            return False
+        """Always True — uses stdlib urllib, no SDK dependency."""
+        return True
 
     @property
     def enabled(self) -> bool:
@@ -58,24 +56,10 @@ class AIProvider:
     def max_retries(self) -> int:
         return int(self.config.get("max_retries", 3))
 
-    # ── client ────────────────────────────────────────────────
-
-    def _get_client(self) -> Any:
-        """Lazy-init the OpenAI client."""
-        if self._client is None:
-            import openai
-            self._client = openai.OpenAI(
-                api_key=self.api_key or "sk-placeholder",
-                base_url=self.base_url,
-                timeout=self.timeout,
-                max_retries=self.max_retries,
-            )
-        return self._client
-
-    # ── classification ────────────────────────────────────────
+    # ── API call ──────────────────────────────────────────────
 
     def classify(self, messages: list[dict[str, str]]) -> dict:
-        """Send a single classification prompt to the LLM.
+        """Send a single classification prompt to the LLM via direct HTTP.
 
         Parameters
         ----------
@@ -85,26 +69,46 @@ class AIProvider:
         Returns
         -------
         dict
-            Raw API response dict with keys ``choices``, ``usage``, etc.
+            Parsed JSON response with keys ``choices``, ``usage``, etc.
         """
-        if not self.available:
-            raise RuntimeError("openai SDK not installed (pip install security-scan[ai])")
+        payload = json.dumps({
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.0,
+            "max_tokens": 256,
+        }).encode("utf-8")
 
-        client = self._get_client()
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=messages,  # type: ignore
-            temperature=0.0,
-            max_tokens=256,
+        headers = {
+            "Content-Type": "application/json",
+        }
+        key = self.api_key
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+
+        url = self.base_url.rstrip("/") + "/chat/completions"
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+
+        last_exc: Exception | None = None
+        for attempt in range(max(self.max_retries, 1)):
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    body = resp.read().decode("utf-8")
+                    return json.loads(body)
+            except (urllib.error.URLError, urllib.error.HTTPError,
+                    OSError, json.JSONDecodeError) as exc:
+                last_exc = exc
+                if attempt + 1 < self.max_retries:
+                    import time
+                    time.sleep(1.0 * (attempt + 1))
+
+        raise RuntimeError(
+            f"AI API call failed after {self.max_retries} retries: {last_exc}"
         )
-        return response
 
     def classify_batch(
         self, prompts: list[list[dict[str, str]]]
     ) -> list[dict]:
-        """Send multiple classification prompts (sequential or parallel).
-
-        Currently sequential; parallel execution is reserved for future.
+        """Send multiple classification prompts (sequential).
 
         Returns
         -------
@@ -118,7 +122,7 @@ class AIProvider:
         for messages in prompts:
             try:
                 response = self.classify(messages)
-                text = response.choices[0].message.content or ""
+                text = response["choices"][0]["message"]["content"] or ""
                 verdict = parser.parse_response(text)
             except Exception as exc:
                 verdict = {"is_sensitive": True, "confidence": 0.5, "reason": f"API error: {exc}"}

@@ -18,6 +18,7 @@ from security_scan.scanner.aggregator import Aggregator
 from security_scan.scanner.ast_scanner import ASTScanner
 from security_scan.scanner.classifier import FileClassifier
 from security_scan.scanner.collector import FileCollector
+from security_scan.scanner.config_scanner import ConfigKeyValueScanner
 from security_scan.scanner.regex_scanner import RegexScanner
 
 
@@ -95,6 +96,7 @@ def scan(path, incremental, ci, output_format, output_file, generate_config, ver
     classifier = FileClassifier(config)
     rule_engine = RuleEngine(config, project_path=path)
     ast_scanner = ASTScanner(config)
+    config_kv_scanner = ConfigKeyValueScanner(config)
     regex_scanner = RegexScanner(rule_engine)
     aggregator = Aggregator()
 
@@ -109,6 +111,9 @@ def scan(path, incremental, ci, output_format, output_file, generate_config, ver
             findings = ast_scanner.scan(file_path, rule_engine)
         else:
             findings = regex_scanner.scan(file_path)
+            # For config files, also run structured key-value analysis
+            kv_findings = config_kv_scanner.scan(file_path)
+            findings.extend(kv_findings)
         all_findings.append(findings)
 
     # ── aggregate & post-process ────────────────────────────
@@ -151,9 +156,9 @@ def install(global_hook):
     installer = HookInstaller({})
     ok = installer.install(global_hook=global_hook)
     if ok:
-        click.echo("✓ pre-commit hook installed.")
+        click.echo("[OK] pre-commit hook installed.")
     else:
-        click.echo("✗ Failed to install hook (not a git repository?).", err=True)
+        click.echo("[FAIL] Failed to install hook (not a git repository?).", err=True)
         raise SystemExit(20)
 
 
@@ -164,9 +169,9 @@ def uninstall(global_hook):
     installer = HookInstaller({})
     ok = installer.uninstall(global_hook=global_hook)
     if ok:
-        click.echo("✓ pre-commit hook removed.")
+        click.echo("[OK] pre-commit hook removed.")
     else:
-        click.echo("✗ Failed to remove hook.", err=True)
+        click.echo("[FAIL] Failed to remove hook.", err=True)
         raise SystemExit(20)
 
 
@@ -176,9 +181,9 @@ def disable():
     installer = HookInstaller({})
     ok = installer.disable()
     if ok:
-        click.echo("✓ pre-commit hook disabled (renamed to .disabled).")
+        click.echo("[OK] pre-commit hook disabled (renamed to .disabled).")
     else:
-        click.echo("✗ No hook to disable.", err=True)
+        click.echo("[FAIL] No hook to disable.", err=True)
 
 
 @hook.command()
@@ -187,9 +192,9 @@ def enable():
     installer = HookInstaller({})
     ok = installer.enable()
     if ok:
-        click.echo("✓ pre-commit hook re-enabled.")
+        click.echo("[OK] pre-commit hook re-enabled.")
     else:
-        click.echo("✗ No disabled hook found.", err=True)
+        click.echo("[FAIL] No disabled hook found.", err=True)
 
 
 # ── init command ──────────────────────────────────────────────
@@ -212,9 +217,9 @@ def init(force, index_url, offline, deps_dir):
     py_ok = sys.version_info >= (3, 8)
     click.echo(f"  Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}", nl=False)
     if py_ok:
-        click.echo(" \033[92m✓\033[0m")
+        click.echo(" \033[92m[OK]\033[0m")
     else:
-        click.echo(" \033[91m✗ 需要 Python ≥ 3.8\033[0m")
+        click.echo(" \033[91m[FAIL] 需要 Python >= 3.8\033[0m")
         raise SystemExit(21)
 
     # 2. Core dependencies
@@ -222,28 +227,28 @@ def init(force, index_url, offline, deps_dir):
     _OPTIONAL = {
         "chardet": ("chardet>=5.0", "encoding"),
         "javalang": ("javalang>=1.3", "ast"),
-        "openai": ("openai>=1.0", "ai"),
+
     }
 
     missing = []
     for mod, spec in _REQUIRED.items():
         if _importable(mod):
-            click.echo(f"  \033[92m✓\033[0m  {spec}")
+            click.echo(f"  \033[92m[OK]\033[0m  {spec}")
         else:
-            click.echo(f"  \033[91m✗\033[0m  {spec} — 缺失")
+            click.echo(f"  \033[91m[FAIL]\033[0m  {spec} — 缺失")
             missing.append(spec)
 
     for mod, (spec, group) in _OPTIONAL.items():
         if _importable(mod):
-            click.echo(f"  \033[92m✓\033[0m  {spec}  [{group}]")
+            click.echo(f"  \033[92m[OK]\033[0m  {spec}  [{group}]")
         else:
-            click.echo(f"  \033[93m-\033[0m  {spec}  [{group}] (可选)")
+            click.echo(f"  \033[93m[-]\033[0m  {spec}  [{group}] (可选)")
 
     # 3. Git check
     if _git_available():
-        click.echo("  \033[92m✓\033[0m  Git")
+        click.echo("  \033[92m[OK]\033[0m  Git")
     else:
-        click.echo("  \033[93m⚠\033[0m  Git 未安装 — Hook 功能不可用")
+        click.echo("  \033[93m[WARN]\033[0m  Git 未安装 — Hook 功能不可用")
 
     # 4. Auto-install missing core deps
     if missing and not offline:
@@ -257,7 +262,7 @@ def init(force, index_url, offline, deps_dir):
         _pip_install(cmd)
 
     click.echo("=" * 40)
-    click.echo("\033[92m✓ 初始化完成\033[0m")
+    click.echo("\033[92m[OK] 初始化完成\033[0m")
 
 
 def _importable(mod_name: str) -> bool:
@@ -269,11 +274,29 @@ def _importable(mod_name: str) -> bool:
         return False
 
 
+def _fix_console_encoding() -> None:
+    """Reconfigure stdout/stderr for Windows GBK console compatibility.
+
+    On Windows, the default console encoding (cp936 / GBK) cannot represent
+    all UTF-8 characters. Setting ``errors='replace'`` prevents
+    ``UnicodeEncodeError`` crashes as a safety net (all console output
+    symbols are now pure ASCII).
+    """
+    import sys
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(errors="replace")
+            except OSError:
+                pass
+
+
 def _git_available() -> bool:
     """Return True if ``git --version`` succeeds."""
     import subprocess
     try:
-        r = subprocess.run(["git", "--version"], capture_output=True, text=True, check=False)
+        r = subprocess.run(["git", "--version"], capture_output=True, encoding="utf-8", errors="replace", check=False)
         return r.returncode == 0
     except FileNotFoundError:
         return False
@@ -283,11 +306,11 @@ def _pip_install(cmd: list[str]) -> None:
     """Run pip install and report result."""
     import subprocess
     click.echo(f"  $ {' '.join(cmd)}", err=True)
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
     if r.returncode == 0:
-        click.echo("  \033[92m✓ 依赖安装完成\033[0m")
+        click.echo("  \033[92m[OK] 依赖安装完成\033[0m")
     else:
-        click.echo(f"  \033[91m✗ 安装失败\033[0m", err=True)
+        click.echo(f"  \033[91m[FAIL] 安装失败\033[0m", err=True)
         click.echo(f"    {r.stderr.strip()}", err=True)
 
 
@@ -298,6 +321,7 @@ def _pip_install(cmd: list[str]) -> None:
 @click.version_option(version=__version__, prog_name="security-scan")
 def cli():
     """security-scan — Java project code security scanning tool."""
+    _fix_console_encoding()
 
 
 cli.add_command(scan)
