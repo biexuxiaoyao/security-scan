@@ -89,7 +89,14 @@ config_file_secrets:
     - "^@[^@]+@$"           # @...@
 
 # 自定义规则
-file_formats:
+custom_rules:
+  - id: "my_custom_rule"
+    name: "My custom rule"
+    scope: "properties"
+    pattern: "my_secret\\s*=\\s*(.+)"
+    severity: "HIGH"
+
+# 文件格式扩展
   - name: "env_file"
     extensions: [".env"]
     scan_strategy: "key_value"
