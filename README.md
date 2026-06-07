@@ -165,7 +165,7 @@ security-scan/
 │       ├── file_utils.py       #   编码检测（UTF-8/GB18030）
 │       ├── encryption.py      #   加密前缀检测共享函数
 │       └── git_utils.py       #   Git 操作
-├── tests/                      # 248 个测试（全部通过）
+├── tests/                      # 252 个测试（全部通过）
 │   ├── test_config/            #   配置加载器测试
 │   ├── test_scanner/           #   扫描引擎 + AST 测试
 │   ├── test_rules/             #   规则引擎测试
@@ -201,7 +201,7 @@ pytest tests/ -v
 # 覆盖率报告
 pytest tests/ --cov=security_scan --cov-report=html
 
-# 当前状态: 248 tests, all passing ✅
+# 当前状态: 252 tests, all passing ✅
 ```
 
 ## 许可

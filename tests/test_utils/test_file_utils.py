@@ -42,6 +42,32 @@ class TestReadFileSafe:
         with pytest.raises((FileNotFoundError, OSError)):
             read_file_safe(tmp_path / "nope.txt")
 
+    def test_large_file_raises(self, tmp_path: Path):
+        f = tmp_path / "large.log"
+        # Write a file larger than the default max size (20 MiB)
+        data = b"x" * (21 * 1024 * 1024)
+        f.write_bytes(data)
+        with pytest.raises(OSError, match="File too large"):
+            read_file_safe(f)
+
+    def test_large_file_with_max_size_override(self, tmp_path: Path):
+        f = tmp_path / "medium.txt"
+        data = b"hello" * 200_000  # ~1 MB
+        f.write_bytes(data)
+        # Should pass with a 5 MB limit
+        content, enc, conf = read_file_safe(f, max_size=5 * 1024 * 1024)
+        assert content.startswith("hello")
+        # Should fail with a tiny limit
+        with pytest.raises(OSError, match="File too large"):
+            read_file_safe(f, max_size=1024)
+
+    def test_max_size_zero_disables_limit(self, tmp_path: Path):
+        f = tmp_path / "big.txt"
+        data = b"x" * (21 * 1024 * 1024)
+        f.write_bytes(data)
+        content, enc, conf = read_file_safe(f, max_size=0)
+        assert len(content) == 21 * 1024 * 1024
+
 
 class TestNormalizePath:
     """normalize_path tests."""
@@ -91,3 +117,9 @@ class TestIsBinaryFile:
 
     def test_non_existent_file(self, tmp_path: Path):
         assert is_binary_file(tmp_path / "ghost.dat") is False
+
+    def test_oversized_file_treated_as_binary(self, tmp_path: Path):
+        f = tmp_path / "huge.txt"
+        data = b"ABC\n" * (7 * 1024 * 1024)  # ~21 MB
+        f.write_bytes(data)
+        assert is_binary_file(f) is True  # too large to scan

@@ -22,6 +22,7 @@ class RuleEngine:
         self.custom_loader = CustomRuleLoader(config)
         self.encrypted_prefixes = config.get("encrypted_prefixes", [])
         self._all_rules: list[dict[str, Any]] | None = None
+        self._scope_cache: dict[str, list[dict[str, Any]]] = {}
 
     @property
     def all_rules(self) -> list[dict[str, Any]]:
@@ -67,7 +68,9 @@ class RuleEngine:
             return []
 
         findings: list[dict] = []
-        for rule in get_rules_for_scope(file_scope):
+        if file_scope not in self._scope_cache:
+            self._scope_cache[file_scope] = get_rules_for_scope(file_scope)
+        for rule in self._scope_cache[file_scope]:
             finding = match_rule_on_line(rule, line, line_number)
             if finding:
                 # ── encrypted prefix check ────────────────────────
