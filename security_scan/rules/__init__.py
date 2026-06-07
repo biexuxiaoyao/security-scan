@@ -8,6 +8,7 @@ from security_scan.rules.builtin_rules import get_rules_for_scope, match_rule_on
 from security_scan.rules.custom_rules import CustomRuleLoader
 from security_scan.rules.whitelist import WhitelistFilter
 from security_scan.rules.context_analyzer import ContextAnalyzer
+from security_scan.utils.encryption import check_encrypted_prefix, extract_value_from_content
 
 
 class RuleEngine:
@@ -81,23 +82,11 @@ class RuleEngine:
         """Return True if the matched value starts with a configured encrypted prefix."""
         if not self.encrypted_prefixes:
             return False
-        content = finding.get("matched_content", "")
-        # Use first occurrence of = or : as separator (avoids picking up
-        # base64 padding characters or colons in URLs).
-        eq_idx = content.find("=") if "=" in content else -1
-        colon_idx = content.find(":") if ":" in content else -1
-        if eq_idx >= 0 and (colon_idx < 0 or eq_idx < colon_idx):
-            value_part = content[eq_idx + 1:]
-        elif colon_idx >= 0:
-            value_part = content[colon_idx + 1:]
-        else:
-            value_part = content
-        value_part = value_part.strip().strip("\"'")
-        for prefix in self.encrypted_prefixes:
-            if value_part.startswith(prefix):
-                finding["encrypted_prefix_matched"] = prefix
-                return True
-        return False
+        value = extract_value_from_content(finding.get("matched_content", ""))
+        is_enc, prefix = check_encrypted_prefix(value, self.encrypted_prefixes)
+        if is_enc:
+            finding["encrypted_prefix_matched"] = prefix
+        return is_enc
 
     def post_process(self, findings: list[dict], project_path: str | None = None) -> list[dict]:
         """Apply whitelist filtering and context analysis to all findings.

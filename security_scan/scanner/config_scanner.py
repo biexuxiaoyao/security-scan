@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from security_scan.utils.encryption import check_encrypted_prefix
 from security_scan.utils.file_utils import read_file_safe, is_binary_file
 
 
@@ -69,14 +70,6 @@ def _matches_any(value: str, patterns: list[re.Pattern]) -> bool:
         if pat.search(value):
             return True
     return False
-
-
-def _starts_with_any(value: str, prefixes: list[str]) -> str | None:
-    """Return the matching prefix if *value* starts with one, else None."""
-    for prefix in prefixes:
-        if value.startswith(prefix):
-            return prefix
-    return None
 
 
 class ConfigKeyValueScanner:
@@ -191,8 +184,8 @@ class ConfigKeyValueScanner:
         is_safe_value = False
 
         # Check encrypted prefixes
-        encrypted_prefix = _starts_with_any(value, self.value_encrypted_prefixes)
-        if encrypted_prefix:
+        is_enc, encrypted_prefix = check_encrypted_prefix(value, self.value_encrypted_prefixes)
+        if is_enc:
             encrypted = True
 
         # Check asterisk masking (****)

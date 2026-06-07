@@ -12,8 +12,8 @@ from security_scan.scanner.config_scanner import (
     _try_parse_key_value,
     _is_asterisk_masked,
     _matches_any,
-    _starts_with_any,
 )
+from security_scan.utils.encryption import check_encrypted_prefix
 
 
 # ── test helpers ───────────────────────────────────────────────
@@ -140,13 +140,13 @@ class TestMatchesAny:
         assert _matches_any("secret123", patterns) is False
 
 
-class TestStartsWithAny:
+class TestCheckEncryptedPrefix:
     def test_matches(self):
-        assert _starts_with_any("BEE_abc123", ["BEE_"]) == "BEE_"
-        assert _starts_with_any("ENC(xyz)", ["ENC("]) == "ENC("
+        assert check_encrypted_prefix("BEE_abc123", ["BEE_"]) == (True, "BEE_")
+        assert check_encrypted_prefix("ENC(xyz)", ["ENC("]) == (True, "ENC(")
 
     def test_no_match(self):
-        assert _starts_with_any("secret123", ["BEE_", "ENC("]) is None
+        assert check_encrypted_prefix("secret123", ["BEE_", "ENC("]) == (False, None)
 
 
 # ── integration: full scanner ─────────────────────────────────

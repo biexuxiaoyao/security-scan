@@ -7,6 +7,7 @@ from typing import Any
 
 from security_scan.rules import RuleEngine
 from security_scan.utils.file_utils import read_file_safe, is_binary_file
+from security_scan.utils.encryption import check_encrypted_prefix
 
 # ── lazy tree-sitter imports ──────────────────────────────────
 
@@ -473,16 +474,15 @@ class ASTScanner:
 
     def _is_encrypted(self, value: str) -> bool:
         """Check if *value* starts with a configured encrypted prefix."""
-        for prefix in self._encrypted_prefixes:
-            if value.strip().startswith(prefix):
-                return True
-        return False
+        if not self._encrypted_prefixes:
+            return False
+        is_enc, _prefix = check_encrypted_prefix(value, self._encrypted_prefixes)
+        return is_enc
 
     def _matched_prefix(self, value: str) -> str:
-        for prefix in self._encrypted_prefixes:
-            if value.strip().startswith(prefix):
-                return prefix
-        return ""
+        """Return the matched encrypted prefix or empty string."""
+        _is_enc, prefix = check_encrypted_prefix(value, self._encrypted_prefixes)
+        return prefix or ""
 
 
 # ── module-level helpers ──────────────────────────────────────

@@ -199,7 +199,7 @@ pytest tests/ -v
 # 覆盖率报告
 pytest tests/ --cov=security_scan --cov-report=html
 
-# 当前状态: 142 tests, all passing ✅
+# 当前状态: 212 tests, all passing ✅
 ```
 
 ## 许可
