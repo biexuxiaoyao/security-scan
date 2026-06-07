@@ -2,6 +2,10 @@
 
 Applies configurable key matching, whitelist filtering, and value
 validation to yml/yaml/properties configuration files.
+
+For YAML files, uses PyYAML's ``compose()`` to preserve line numbers and
+build full dot-separated key paths (e.g. ``spring.datasource.password``).
+For ``.properties`` files, falls back to line-by-line ``key=value`` parsing.
 """
 
 from __future__ import annotations
@@ -10,6 +14,8 @@ import fnmatch
 import re
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from security_scan.utils.encryption import check_encrypted_prefix
 from security_scan.utils.file_utils import read_file_safe, is_binary_file
@@ -22,6 +28,48 @@ def _is_excluded(file_path: str, exclude_patterns: list[str]) -> bool:
         if fnmatch.fnmatch(name, pattern):
             return True
     return False
+
+
+def _is_yaml_file(file_path: str) -> bool:
+    """Return True if the file is a YAML file by extension."""
+    return Path(file_path).suffix.lower() in (".yml", ".yaml")
+
+
+def _parse_yaml_key_values(content: str) -> list[tuple[str, str, int]]:
+    """Parse YAML content using ``yaml.compose()`` for line-number accuracy.
+
+    Returns a list of ``(full_dotted_key, value, 1-based_line_number)`` tuples
+    for every scalar leaf node in the YAML tree.  Returns an empty list on
+    parse failure.
+    """
+    try:
+        node = yaml.compose(content)
+    except yaml.YAMLError:
+        return []
+
+    if node is None:
+        return []
+
+    results: list[tuple[str, str, int]] = []
+
+    def _walk(n: yaml.Node, prefix: str) -> None:
+        if isinstance(n, yaml.MappingNode):
+            for key_node, val_node in n.value:
+                if isinstance(key_node, yaml.ScalarNode):
+                    seg = str(key_node.value)
+                    full = f"{prefix}.{seg}" if prefix else seg
+                    if isinstance(val_node, yaml.ScalarNode):
+                        # line is 0-based in yaml, convert to 1-based
+                        line = key_node.start_mark.line + 1
+                        results.append((full, str(val_node.value), line))
+                    elif isinstance(val_node, (yaml.MappingNode, yaml.SequenceNode)):
+                        _walk(val_node, full)
+                elif isinstance(n, yaml.SequenceNode):
+                    for i, item in enumerate(n.value):
+                        _walk(item, f"{prefix}[{i}]")
+
+    _walk(node, "")
+    return results
 
 
 def _try_parse_key_value(line: str) -> tuple[str, str] | None:
@@ -119,8 +167,19 @@ class ConfigKeyValueScanner:
                 "patterns": compiled_pats,
             })
 
-    def scan(self, file_path: str) -> list[dict]:
+    def scan(self, file_path: str, content: str | None = None) -> list[dict]:
         """Scan a single config file for credential-in-key issues.
+
+        Parameters
+        ----------
+        file_path :
+            Path to the config file.
+        content :
+            Pre-read file content.  If provided, skips ``read_file_safe()``
+            — used when the caller has already read the file.
+
+        Uses YAML-aware parsing for ``.yml``/``.yaml`` files (preserves
+        nested key paths and line numbers), line-by-line for ``.properties``.
 
         Returns
         -------
@@ -139,36 +198,43 @@ class ConfigKeyValueScanner:
         if not path.is_file() or is_binary_file(file_path):
             return []
 
-        try:
-            content, _enc, _conf = read_file_safe(file_path)
-        except (OSError, UnicodeDecodeError):
-            return []
+        if content is None:
+            try:
+                content, _enc, _conf = read_file_safe(file_path)
+            except (OSError, UnicodeDecodeError):
+                return []
 
         findings: list[dict] = []
-        for line_number, line in enumerate(content.splitlines(), start=1):
-            result = self._scan_line(line, file_path, line_number)
-            if result:
-                findings.append(result)
+
+        if _is_yaml_file(file_path):
+            key_values = _parse_yaml_key_values(content)
+            for full_key, value, line_number in key_values:
+                result = self._scan_kv(full_key, value, file_path, line_number)
+                if result:
+                    findings.append(result)
+        else:
+            # Properties file — line by line
+            for line_number, line in enumerate(content.splitlines(), start=1):
+                kv = _try_parse_key_value(line)
+                if kv is None:
+                    continue
+                key, value = kv
+                result = self._scan_kv(key, value, file_path, line_number)
+                if result:
+                    findings.append(result)
 
         return findings
 
-    def _scan_line(
-        self, line: str, file_path: str, line_number: int
+    def _scan_kv(
+        self, key: str, value: str, file_path: str, line_number: int
     ) -> dict | None:
-        """Scan a single config file line.
+        """Analyse a single (key, value) pair from a config file.
 
-        1. Parse key=value pair.
-        2. Check key against sensitive patterns.
-        3. If matched, check key whitelist.
-        4. Validate value (encrypted / masked / placeholder).
-        5. Return finding or None.
+        1. Check key against sensitive patterns.
+        2. If matched, check key whitelist.
+        3. Validate value (encrypted / masked / placeholder).
+        4. Return finding or None.
         """
-        kv = _try_parse_key_value(line)
-        if kv is None:
-            return None
-
-        key, value = kv
-
         # Step 1: Find which key rule (if any) matches this key
         matched_rule = self._match_key_rule(key)
         if matched_rule is None:
@@ -226,6 +292,18 @@ class ConfigKeyValueScanner:
             finding["_safe_placeholder"] = True
 
         return finding
+
+    def _scan_line(
+        self, line: str, file_path: str, line_number: int
+    ) -> dict | None:
+        """Scan a single config file line (DEPRECATED — kept for backward compat).
+
+        Delegates to ``_scan_kv`` after line-parsing.
+        """
+        kv = _try_parse_key_value(line)
+        if kv is None:
+            return None
+        return self._scan_kv(kv[0], kv[1], file_path, line_number)
 
     # ── internals ─────────────────────────────────────────────
 

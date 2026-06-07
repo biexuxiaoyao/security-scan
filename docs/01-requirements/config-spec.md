@@ -45,27 +45,65 @@ encrypted_prefixes:
   - "$5$"           # SHA-256 哈希
   - "$6$"           # SHA-512 哈希
 
-# 自定义规则
-custom_rules:
-  - id: "my_custom_rule"
-    name: "My custom rule"
-    scope: "properties"
-    pattern: "my_secret\\s*=\\s*(.+)"
-    severity: "HIGH"
+# 配置文件密钥检测（结构化 KV 扫描器）
+config_file_secrets:
+  enabled: true
+  exclude_patterns:                 # glob 排除模式（如 messages_*.properties）
+    - "messages_*.properties"
+  key_rules:                        # key 名匹配规则（任意一条命中即触发）
+    - id: "config_plaintext_password"
+      name: "配置文件明文密码"
+      severity: "HIGH"
+      patterns:
+        - "(?i).*redis.*(?:password|auth|pass|secret)$"
+        - "(?i)ZOO_SERVER_PASSWORDS|ZOO\\.SERVER\\.PASSWORDS"
+    - id: "config_plaintext_key"
+      name: "配置文件明文密钥"
+      severity: "HIGH"
+      patterns:
+        - "(?i).*(?:password|secret|pwd|key|token)$"
+    - id: "config_plaintext_token"
+      name: "配置文件明文Token"
+      severity: "HIGH"
+      patterns:
+        - "(?i)sasl\\.jaas\\.config"
+        - "(?i)spring\\.kafka\\.properties\\.sasl\\.jaas\\.config"
+        - "(?i)bee\\.kafka\\.ds1\\.properties\\.sasl\\.jaas\\.config"
+  key_whitelist:                    # key 名白名单（命中则跳过）
+    - "(?i)^(?:publicKey|public.key|pubKey|appKey|accesskey)$"
+    - "(?i)^(?:topickey|relatedkey|binding-routing-key)$"
+    - "(?i).*RelatedKey.*"
+    - "(?i).*poseidon.*"
+    - "(?i)^(?:ignoretoken|bee\\.microservice\\.token)$"
+  value_encrypted_prefixes:         # 加密值前缀（字符串前缀匹配）
+    - "BEE_"            # 公司自研加密
+    - "ENC("            # jasypt
+    - "{ciph"           # Spring Cloud Config
+    - "encrypt:"        # 其他加密标记
+    - "M_ENC"
+    - "LSFI_ENV_COMMON"
+  value_placeholder_patterns:       # 占位符模式（视为安全）
+    - "^\\$\\([^)]+\\)$"    # $(...)
+    - "^\\$\\{[^}]+\\}$"    # ${...}
+    - "^<[^>]+>$"           # <...>
+    - "^@[^@]+@$"           # @...@
 
-# 文件格式扩展
+# 自定义规则
 file_formats:
   - name: "env_file"
     extensions: [".env"]
     scan_strategy: "key_value"
     high_risk_keys: ["DB_PASSWORD", "API_KEY", "SECRET_KEY"]
 
-# AI 辅助分类（可选）
+# AI 辅助分类（可选，使用 stdlib HTTP，无需 SDK）
 ai:
   enabled: false
-  provider: "openai"
-  model: "gpt-4o-mini"
+  provider: "openai"            # openai / azure / deepseek / ollama
+  model: "deepseek-chat"        # 支持的模型由 provider 决定
   api_key_env: "SECURITY_SCAN_AI_KEY"
+  base_url: "https://api.openai.com/v1"   # 通过 base_url 切换 provider
+  timeout: 10
+  max_retries: 3
   confidence_threshold: 0.7
 
 # pip 仓库配置（私有仓库）

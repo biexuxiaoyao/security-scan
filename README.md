@@ -142,6 +142,7 @@ security-scan/
 │   │   ├── classifier.py       #   文件分类（扩展名→策略）
 │   │   ├── ast_scanner.py      #   🌲 tree-sitter AST 扫描器
 │   │   ├── regex_scanner.py    #   正则扫描器
+│   │   ├── config_scanner.py   #   配置文件 KV 扫描器
 │   │   └── aggregator.py       #   结果聚合去重排序
 │   ├── rules/                  # 规则引擎
 │   │   ├── builtin_rules.py    #   10 条内置规则
@@ -162,8 +163,9 @@ security-scan/
 │   │   └── sarif_report.py     #   SARIF 2.1.0
 │   └── utils/                  # 工具
 │       ├── file_utils.py       #   编码检测（UTF-8/GB18030）
-│       └── git_utils.py        #   Git 操作
-├── tests/                      # 142 个测试（全部通过）
+│       ├── encryption.py      #   加密前缀检测共享函数
+│       └── git_utils.py       #   Git 操作
+├── tests/                      # 248 个测试（全部通过）
 │   ├── test_config/            #   配置加载器测试
 │   ├── test_scanner/           #   扫描引擎 + AST 测试
 │   ├── test_rules/             #   规则引擎测试
@@ -199,7 +201,7 @@ pytest tests/ -v
 # 覆盖率报告
 pytest tests/ --cov=security_scan --cov-report=html
 
-# 当前状态: 212 tests, all passing ✅
+# 当前状态: 248 tests, all passing ✅
 ```
 
 ## 许可

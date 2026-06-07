@@ -165,12 +165,28 @@ class WhitelistFilter:
 
         for rule in self._rules:
             if rule["type"] == "file_line":
-                if rule["file"] in file_path and rule["line"] == line_number:
+                if rule["line"] == line_number and self._path_matches(file_path, rule["file"]):
                     return True
             elif rule["type"] == "file":
-                if rule["file"] in file_path:
+                if self._path_matches(file_path, rule["file"]):
                     return True
             elif rule["type"] == "pattern":
                 if rule["pattern"].search(content):
                     return True
         return False
+
+    @staticmethod
+    def _path_matches(file_path: str, pattern: str) -> bool:
+        """Check if *file_path* matches *pattern* using glob or prefix matching.
+
+        - If *pattern* contains a ``*`` or ``?`` glob character, uses
+          ``fnmatch``.
+        - Otherwise checks if *file_path* starts with *pattern* (so that
+          ``"src/test"`` matches ``"src/test/Foo.java"`` but *not*
+          ``"src/test-utils/Foo.java"``).
+        """
+        if "*" in pattern or "?" in pattern:
+            import fnmatch
+            return fnmatch.fnmatch(file_path, pattern)
+        # Directory prefix — ensure we match a path component boundary
+        return file_path == pattern or file_path.startswith(pattern.rstrip("/") + "/")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from security_scan.rules import RuleEngine
 from security_scan.utils.file_utils import read_file_safe, is_binary_file
@@ -17,7 +18,8 @@ class RegexScanner:
     def __init__(self, rule_engine: RuleEngine):
         self.rule_engine = rule_engine
 
-    def scan(self, file_path: str, file_scope: str | None = None) -> list[dict]:
+    def scan(self, file_path: str, file_scope: str | None = None,
+             content: Optional[str] = None) -> list[dict]:
         """Scan a single file with regex rules and return findings.
 
         Parameters
@@ -27,6 +29,10 @@ class RegexScanner:
         file_scope :
             Scope string (e.g. ``"properties"``, ``"yaml"``).
             If ``None`` it is inferred from the file extension.
+        content :
+            Pre-read file content.  If provided, the scanner skips
+            ``read_file_safe()`` — useful when the caller has already
+            read the file (e.g. for a second scan pass).
 
         Returns
         -------
@@ -40,10 +46,11 @@ class RegexScanner:
         if file_scope is None:
             file_scope = _scope_from_suffix(path.suffix)
 
-        try:
-            content, _enc, _conf = read_file_safe(file_path)
-        except (OSError, UnicodeDecodeError):
-            return []
+        if content is None:
+            try:
+                content, _enc, _conf = read_file_safe(file_path)
+            except (OSError, UnicodeDecodeError):
+                return []
 
         findings: list[dict] = []
         for line_number, line in enumerate(content.splitlines(), start=1):

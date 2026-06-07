@@ -91,3 +91,37 @@ class TestWhitelistFilter:
         assert wf.has_inline_ignore("x = 1  // security-scan:ignore")
         assert wf.has_inline_ignore("x = 1  /* security-scan:ignore */")
         assert not wf.has_inline_ignore("x = 1")
+
+    # ── exact path matching (avoid in-substring false positives) ─
+
+    def test_path_matches_exact(self):
+        assert WhitelistFilter._path_matches("src/Secret.java", "src/Secret.java")
+
+    def test_path_matches_prefix(self):
+        assert WhitelistFilter._path_matches("src/test/Foo.java", "src/test")
+
+    def test_path_matches_does_not_match_substring_prefix(self):
+        """``src/test`` should NOT match ``src/test-utils/Foo.java``."""
+        assert not WhitelistFilter._path_matches("src/test-utils/Foo.java", "src/test")
+
+    def test_path_matches_glob(self):
+        assert WhitelistFilter._path_matches("src/gen/Foo.java", "src/gen/*.java")
+
+    def test_path_matches_glob_no_match(self):
+        assert not WhitelistFilter._path_matches("src/gen/Foo.txt", "src/gen/*.java")
+
+    def test_file_line_whitelist_uses_exact_path(self, tmp_path):
+        """A file_line whitelist for ``src/test`` must not suppress findings
+        from ``src/test-utils/``."""
+        wf = WhitelistFilter({})
+        wl = tmp_path / ".security-scan-whitelist"
+        wl.write_text("src/test:5\n")
+        wf._rules = wf.load_rules(str(tmp_path))
+
+        findings = [
+            {"file_path": "src/test/Foo.java", "line_number": 5, "matched_content": "x"},
+            {"file_path": "src/test-utils/Bar.java", "line_number": 5, "matched_content": "y"},
+        ]
+        result = wf.filter(findings)
+        assert len(result) == 1
+        assert result[0]["file_path"] == "src/test-utils/Bar.java"

@@ -20,6 +20,7 @@ from security_scan.scanner.classifier import FileClassifier
 from security_scan.scanner.collector import FileCollector
 from security_scan.scanner.config_scanner import ConfigKeyValueScanner
 from security_scan.scanner.regex_scanner import RegexScanner
+from security_scan.utils.file_utils import read_file_safe
 
 
 def _determine_exit_code(findings: list[dict], config: dict) -> int:
@@ -110,9 +111,14 @@ def scan(path, incremental, ci, output_format, output_file, generate_config, ver
         if strategy == "ast":
             findings = ast_scanner.scan(file_path, rule_engine)
         else:
-            findings = regex_scanner.scan(file_path)
+            # Read once, share between regex and KV scanners
+            try:
+                file_content, _enc, _conf = read_file_safe(file_path)
+            except (OSError, UnicodeDecodeError):
+                continue
+            findings = regex_scanner.scan(file_path, content=file_content)
             # For config files, also run structured key-value analysis
-            kv_findings = config_kv_scanner.scan(file_path)
+            kv_findings = config_kv_scanner.scan(file_path, content=file_content)
             findings.extend(kv_findings)
         all_findings.append(findings)
 

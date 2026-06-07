@@ -376,5 +376,38 @@ class TestConfigKeyValueScanner:
         f.write_text("redis:\n  password: plaintext\n")
         scanner = self._make_scanner()
         result = scanner.scan(str(f))
-        # YAML multi-line structure: only "password: plaintext" is scanned
         assert len(result) == 1
+        assert result[0]["config_key"] == "redis.password"
+
+    def test_nested_yaml_detects_redis_password(self, tmp_path):
+        """YAML nesting: ``spring.redis.password`` must match ``redis.*password``."""
+        f = tmp_path / "app.yml"
+        f.write_text(
+            "spring:\n"
+            "  redis:\n"
+            "    host: localhost\n"
+            "    password: secret123\n"
+        )
+        scanner = self._make_scanner()
+        result = scanner.scan(str(f))
+        assert len(result) == 1
+        assert result[0]["config_key"] == "spring.redis.password"
+        assert result[0]["rule_id"] == "config_plaintext_password"
+
+    def test_yaml_parse_failure_falls_back_empty(self, tmp_path):
+        """Malformed YAML should not raise, just return empty."""
+        f = tmp_path / "bad.yml"
+        f.write_text(": invalid yaml :: \n")
+        scanner = self._make_scanner()
+        result = scanner.scan(str(f))
+        assert result == []
+
+    def test_yaml_encrypted_value_detected_via_nested_path(self, tmp_path):
+        """Encrypted prefix on nested YAML key is detected."""
+        f = tmp_path / "app.yml"
+        f.write_text("spring:\n  redis:\n    password: BEE_encrypted_value\n")
+        scanner = self._make_scanner()
+        result = scanner.scan(str(f))
+        assert len(result) == 1
+        assert result[0]["encrypted"] is True
+        assert result[0]["severity"] == "LOW"

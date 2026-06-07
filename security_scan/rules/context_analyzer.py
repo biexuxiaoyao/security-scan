@@ -8,7 +8,6 @@ from typing import Any
 # Patterns that indicate non-sensitive values
 _BOOLEAN_LIKE = re.compile(r'^(true|false|yes|no|on|off)$', re.IGNORECASE)
 _NUMERIC_LIKE = re.compile(r'^\d+(\.\d+)?$')
-_PORT_RANGE = re.compile(r'^\d{2,5}$')
 _VERSION_LIKE = re.compile(r'^\d+\.\d+\.\d+$')
 _URL_LIKE = re.compile(r'^https?://|^localhost|^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}')
 
